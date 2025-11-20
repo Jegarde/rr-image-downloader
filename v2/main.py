@@ -25,7 +25,7 @@ class ImageDownloader:
     TAGGED_ENDPOINT = "v3/feed/player"
     PHOTOS_ENDPOINT = "v4/player"
 
-    CONCURRENCY = 50 
+    CONCURRENCY = 30 
     TIMEOUT = aiohttp.ClientTimeout(total=30)
 
     html_session: AsyncHTMLSession = None
@@ -86,7 +86,7 @@ class ImageDownloader:
         download_count = await self.download_all()
 
         print(f"\nFinished archiving photos! Account: {self.account_id}")
-        print(f"Downloaded {sum(download_count)} / {self.total_count} images.")
+        print(f"Downloaded {download_count} / {self.total_count} images.")
 
         await self.close()
         
@@ -153,6 +153,8 @@ class ImageDownloader:
         page = 0
         while True:
             images_json = await self.__fetch_image_data(is_tagged, page)
+            self.__save_image_data(is_tagged, images_json, page)
+
             images_with_count = self.__convert_images_json_to_tuples(images_json, is_tagged)
 
             self.images_to_download += images_with_count.images
@@ -166,6 +168,18 @@ class ImageDownloader:
             return self.tagged_count
         else:
             return self.photos_count
+
+
+    # Saves raw image data to archive
+    def __save_image_data(self, is_tagged: bool, image_data: List[dict], page: int):
+        filepath = os.path.join(
+            str(self.account_id), 
+            "tagged_data" if is_tagged else "photos_data", 
+            f"{page}.json"
+        )
+
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(image_data, f, ensure_ascii=False, indent=4)
 
 
     # Returns the URL for image data
@@ -226,8 +240,7 @@ class ImageDownloader:
             filename = self.__format_filename(image_data)
             url = f"https://img.rec.net/{image_data['ImageName']}"
 
-            filepath = os.path.join("tagged" if is_tagged else "photos", filename)
-            filepath = os.path.join(str(self.account_id), filepath)
+            filepath = os.path.join(str(self.account_id), "tagged" if is_tagged else "photos", filename)
 
             image = Image(url, filepath)
             images.append(image)
@@ -244,7 +257,6 @@ class ImageDownloader:
         )
 
         return images_with_count
-
 
     def __add_png_extension_if_missing(self, filename) -> str:
         if "." not in filename:
@@ -281,7 +293,7 @@ class ImageDownloader:
             
 
 async def main():
-    downloader = await ImageDownloader.create(account_id=1700372)
+    downloader = await ImageDownloader.create(account_id=1203872)
     await downloader.archive(ask_for_confirmation=True)
 
 asyncio.run(main())
