@@ -34,6 +34,7 @@ class ImageDownloader:
 
     photos_count: int = 0
     tagged_count: int = 0
+    total_count: int = 0
 
     images_to_download: List[Image] = []
 
@@ -61,6 +62,34 @@ class ImageDownloader:
         if self.html_session:
             await self.html_session.close()
 
+    
+    # Archives given account's taken photos and tagged photos
+    async def archive(self, ask_for_confirmation: bool = True):
+        await self.gather_images()
+
+        if ask_for_confirmation and self.prompt_for_confirmation() == False:
+            print("Cancelled!")
+            return
+        
+        await self.download_all()
+        
+
+    # Asks the user if they want to proceed with downloading the photos.
+    # Returns answer as a boolean.
+    def prompt_for_confirmation(self) -> bool:
+        print(f"You're about to download {self.total_count} photos in total.")
+        print(f"Taken photos: {self.photos_count}")
+        print(f"Tagged photos: {self.tagged_count}")
+        print(f"Account ID: {self.account_id}\n")
+
+        answer = ""
+        while answer != "y":
+            answer = input("Proceed? (y/n) > ").lower()
+            if answer == "n":
+                return False
+            
+        return True
+
 
     # Creates archive directories
     def __create_directories(self):
@@ -85,11 +114,12 @@ class ImageDownloader:
         shutil.copytree(shared_files_path, root_path, dirs_exist_ok=True)
 
 
-    # Gathers taken photos and tagged photos. Returns total image count.
-    async def gather_images(self) -> int:
+    # Gathers taken photos and tagged photos. 
+    # Stores total count of photos in instance variable total_count
+    async def gather_images(self):
         await self.download_image_data(is_tagged=True)
         await self.download_image_data(is_tagged=False)
-        return self.photos_count + self.tagged_count
+        self.total_count = self.photos_count + self.tagged_count
 
 
     """
@@ -130,7 +160,7 @@ class ImageDownloader:
     # Turns image data into a indexable filename
     def __format_filename(self, image_data: dict) -> str:
         image_id = image_data["Id"]
-        creation_date = image_data["CreatedAt"]
+        creation_date = self.__shorten_creation_timestamp(image_data["CreatedAt"])
         player_id = image_data["PlayerId"]
         room_id = image_data["RoomId"]
         image_name = image_data['ImageName']
@@ -139,6 +169,14 @@ class ImageDownloader:
         filename = self.__add_png_extension_if_missing(filename)
 
         return filename
+    
+
+    # Shortens a ISO 8601 timestamp to just the date
+    # ex: 2023-10-12T20:24:50.0168341Z -> 2023-10-12
+    def __shorten_creation_timestamp(self, creation_timestamp: str) -> str:
+        if "T" in creation_timestamp:
+            return creation_timestamp.split("T")[0]
+        return creation_timestamp
 
 
     # Takes in a list of image data and returns a list of tuples. 
@@ -169,13 +207,21 @@ class ImageDownloader:
         return filename
 
 
-    async def download_all(self, images: List[Image]):
-        tasks = [self.download_image(image) for image in images]
+    # Downloads all images from instance variable images_to_download
+    async def download_all(self):
+        total_count = self.photos_count + self.tagged_count
+        assert total_count != 0, "No photos to download!"
+
+        print(f"Downloading {total_count} photos...")
+
+        tasks = [self.download_image(image) for image in self.images_to_download]
         results = await tqdm_asyncio.gather(*tasks)
 
-        print(f"\nDownloaded images")
+        print(f"\nFinished archiving photos! Account: {self.account_id}")
+        print(f"Downloaded {self.photos_count} photos and {self.tagged_count} tagged photos.")
 
 
+    # Downloads an image in chunks
     async def download_image(self, image: Image):
         async with self.semaphore:
             try:
@@ -191,13 +237,10 @@ class ImageDownloader:
                 print(f"Error downloading {image.url}: {e}")
                 return False
             
+
 async def main():
     downloader = await ImageDownloader.create(account_id=1700372)
-    count = await downloader.gather_images()
-
-    print(downloader.images_to_download)
-    print("Total:", count)
-
+    await downloader.archive(ask_for_confirmation=True)
     await downloader.close()
 
 asyncio.run(main())
