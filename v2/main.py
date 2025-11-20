@@ -65,11 +65,14 @@ class ImageDownloader:
     async def close(self):
         if self.session:
             await self.session.close()
+            self.session = None
         if self.html_session:
             await self.html_session.close()
+            self.html_session = None
 
     
     # Archives given account's taken photos and tagged photos
+    # Closes sessions once done!
     async def archive(self, ask_for_confirmation: bool = True):
         print("Gathering image data. This can take a moment...")
         await self.gather_images()
@@ -78,7 +81,14 @@ class ImageDownloader:
             print("Cancelled!")
             return
         
-        await self.download_all()
+        print("Downloading...")
+
+        download_count = await self.download_all()
+
+        print(f"\nFinished archiving photos! Account: {self.account_id}")
+        print(f"Downloaded {sum(download_count)} / {self.total_count} images.")
+
+        await self.close()
         
 
     # Asks the user if they want to proceed with downloading the photos.
@@ -243,16 +253,14 @@ class ImageDownloader:
 
 
     # Downloads all images from instance variable images_to_download
-    async def download_all(self):
+    # Returns amount of photos successfully downloaded
+    async def download_all(self) -> int:
         assert self.total_count != 0, "No photos to download!"
-
-        print("Downloading...")
 
         tasks = [self.download_image(image) for image in self.images_to_download]
         results = await tqdm_asyncio.gather(*tasks)
-
-        print(f"\nFinished archiving photos! Account: {self.account_id}")
-        print(f"Downloaded {sum(results)} / {self.total_count} images.")
+        
+        return sum(results)
 
 
     # Downloads an image in chunks
@@ -275,6 +283,5 @@ class ImageDownloader:
 async def main():
     downloader = await ImageDownloader.create(account_id=1700372)
     await downloader.archive(ask_for_confirmation=True)
-    await downloader.close()
 
 asyncio.run(main())
