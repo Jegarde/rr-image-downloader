@@ -15,9 +15,10 @@ try:
     import uvloop
     uvloop.install()
 except Exception:
-    print("INFO: uvloop not available on windows :(")
+    print("[INFO] uvloop not available on windows :(")
     
 Image = namedtuple("Image", ["url", "filepath"])
+ImagesWithCount = namedtuple("ImagesWithCount", ["count", "images"])
 
 class ImageDownloader:
     HOST = "https://apim.rec.net/apis/api/images/"
@@ -38,10 +39,15 @@ class ImageDownloader:
 
     images_to_download: List[Image] = []
 
+    silenced: bool = False
+
     def __init__(self, account_id: int):
         self.account_id = account_id
 
 
+    """
+    Creates an image downloader instance.
+    """
     @classmethod
     async def create(cls, account_id: int):
         self = ImageDownloader(account_id)
@@ -65,6 +71,7 @@ class ImageDownloader:
     
     # Archives given account's taken photos and tagged photos
     async def archive(self, ask_for_confirmation: bool = True):
+        print("Gathering image data. This can take a moment...")
         await self.gather_images()
 
         if ask_for_confirmation and self.prompt_for_confirmation() == False:
@@ -77,9 +84,9 @@ class ImageDownloader:
     # Asks the user if they want to proceed with downloading the photos.
     # Returns answer as a boolean.
     def prompt_for_confirmation(self) -> bool:
-        print(f"You're about to download {self.total_count} photos in total.")
-        print(f"Taken photos: {self.photos_count}")
-        print(f"Tagged photos: {self.tagged_count}")
+        print(f"You're about to download {self.total_count:,} photos in total.")
+        print(f"Taken photos: {self.photos_count:,}")
+        print(f"Tagged photos: {self.tagged_count:,}")
         print(f"Account ID: {self.account_id}\n")
 
         answer = ""
@@ -89,7 +96,7 @@ class ImageDownloader:
                 return False
             
         return True
-
+    
 
     # Creates archive directories
     def __create_directories(self):
@@ -132,24 +139,45 @@ class ImageDownloader:
         False: grabs images player has taken
     """
     async def download_image_data(self, is_tagged: bool) -> int:
-        endpoint = self.TAGGED_ENDPOINT if is_tagged else self.PHOTOS_ENDPOINT
-        url = f"{self.HOST}/{endpoint}/{self.account_id}"
+        PAGE_MAX_COUNT = 1000
+        page = 0
+        while True:
+            images_json = await self.__fetch_image_data(is_tagged, page)
+            images_with_count = self.__convert_images_json_to_tuples(images_json, is_tagged)
 
-        # Cannot use HTMLSession within an existing event loop
+            self.images_to_download += images_with_count.images
+
+            if images_with_count.count < PAGE_MAX_COUNT:
+                break
+
+            page += 1
+
+        if is_tagged:
+            return self.tagged_count
+        else:
+            return self.photos_count
+
+
+    # Returns the URL for image data
+    # 1 page = skip 1000
+    def __get_image_data_url(self, is_tagged: bool, page: int) -> str:
+        endpoint = self.TAGGED_ENDPOINT if is_tagged else self.PHOTOS_ENDPOINT
+        url = f"{self.HOST}/{endpoint}/{self.account_id}?take=1000&skip={page*1000}"
+        return url
+
+
+    # Fetches image json data. Page = 1,000 images.
+    async def __fetch_image_data(self, is_tagged: bool, page: int) -> List[dict]:
+        url = self.__get_image_data_url(is_tagged, page)
         html = await self.__fetch_html_data(url)
 
         # Image data is located inside pre element
         raw_images_json = html.find("pre", first=True).text
         images_json = json.loads(raw_images_json)
 
-        self.images_to_download += self.__convert_images_json_to_tuples(images_json, is_tagged)
+        return images_json
 
-        if is_tagged:
-            return self.tagged_count
-        else:
-            return self.photos_count
-        
-    
+
     async def __fetch_html_data(self, url: str) -> str:
         resp = await self.html_session.get(url)
         # API requires JavaScript rendering in order to return data. Otherwise returns 403.
@@ -179,10 +207,11 @@ class ImageDownloader:
         return creation_timestamp
 
 
-    # Takes in a list of image data and returns a list of tuples. 
+    # Takes in a list of image data and returns images with the count.
     # Also counts image count and stores in the respective instance image count variable.
-    def __convert_images_json_to_tuples(self, images_json: List[dict], is_tagged: bool) -> List[Image]:
+    def __convert_images_json_to_tuples(self, images_json: List[dict], is_tagged: bool) -> ImagesWithCount:
         images = []
+        count = 0
         for image_data in images_json:
             filename = self.__format_filename(image_data)
             url = f"https://img.rec.net/{image_data['ImageName']}"
@@ -197,8 +226,14 @@ class ImageDownloader:
                 self.tagged_count += 1
             else:
                 self.photos_count += 1
+            count += 1
 
-        return images
+        images_with_count = ImagesWithCount(
+            count=count,
+            images=images
+        )
+
+        return images_with_count
 
 
     def __add_png_extension_if_missing(self, filename) -> str:
@@ -209,16 +244,15 @@ class ImageDownloader:
 
     # Downloads all images from instance variable images_to_download
     async def download_all(self):
-        total_count = self.photos_count + self.tagged_count
-        assert total_count != 0, "No photos to download!"
+        assert self.total_count != 0, "No photos to download!"
 
-        print(f"Downloading {total_count} photos...")
+        print("Downloading...")
 
         tasks = [self.download_image(image) for image in self.images_to_download]
         results = await tqdm_asyncio.gather(*tasks)
 
         print(f"\nFinished archiving photos! Account: {self.account_id}")
-        print(f"Downloaded {self.photos_count} photos and {self.tagged_count} tagged photos.")
+        print(f"Downloaded {sum(results)} / {self.total_count} images.")
 
 
     # Downloads an image in chunks

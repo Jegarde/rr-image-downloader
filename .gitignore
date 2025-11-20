@@ -1,3 +1,7 @@
 images/
 venv/
 secret.py
+__pycache__/
+
+# Archive
+archive/
