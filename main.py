@@ -66,7 +66,7 @@ class ImageDownloader:
     Creates an image downloader instance.
     """
     @classmethod
-    async def create(cls, account_id: int) -> ImageDownloader:
+    async def create(cls, account_id: int):
         self = ImageDownloader(account_id)
 
         self._create_directories()
@@ -354,7 +354,7 @@ class ImageDownloader:
             
 
 async def main():
-    downloader = await ImageDownloader.create(account_id=1203872)
+    downloader = await ImageDownloader.create(account_id=2002726)
     await downloader.archive(ask_for_confirmation=True)
 
 
