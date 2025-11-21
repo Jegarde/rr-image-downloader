@@ -3,6 +3,7 @@ Archive your photos and tags before it's too late!
 
 [Buy me a coffee](https://ko-fi.com/jegarde) if you found this useful and you're feeling generous. :)
 
+
 ## Archive
 - All public photos and tags separated in their respective directories
 - File names contain
@@ -34,4 +35,8 @@ Example:
 `python image_downloader.py 1700372`
 
 You can input multiple account ids to archive them all.
+
+
+## Performance
+zoooommmm
 
