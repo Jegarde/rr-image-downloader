@@ -168,7 +168,7 @@ class ImageDownloader:
         shared_files_path = "shared_files"
 
         assert os.path.exists(root_path), "Directories missing!"
-        assert os.path.exists(shared_files_path), "Shared files missing!"
+        if not os.path.exists(shared_files_path): return
 
         shutil.copytree(shared_files_path, root_path, dirs_exist_ok=True)
 
