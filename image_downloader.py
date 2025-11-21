@@ -4,8 +4,9 @@ import asyncio
 import aiofiles
 import json
 import shutil
+import sys
 from requests_html import AsyncHTMLSession
-from typing import List
+from typing import List, Optional
 from tqdm.asyncio import tqdm_asyncio
 from collections import namedtuple
 
@@ -106,8 +107,14 @@ class ImageDownloader:
         print("Gathering image data. This can take a moment...")
         await self._gather_images()
 
+        if self.total_count == 0:
+            print("Account has no photos or tags! Finished.")
+            await self.close()
+            return
+
         if ask_for_confirmation and self._prompt_for_confirmation() == False:
             print("Cancelled!")
+            await self.close()
             return
         
         print("Downloading...")
@@ -326,7 +333,7 @@ class ImageDownloader:
     Returns amount of photos successfully downloaded
     """
     async def _download_all(self) -> int:
-        assert self.total_count != 0, "No photos to download!"
+        if self.total_count == 0: return 0
 
         tasks = [self._download_image(image) for image in self.images_to_download]
         results = await tqdm_asyncio.gather(*tasks)
@@ -353,9 +360,76 @@ class ImageDownloader:
                 return False
             
 
-async def main():
-    downloader = await ImageDownloader.create(account_id=2002726)
-    await downloader.archive(ask_for_confirmation=True)
+"""
+Extract account ids from CLI args. silly implementation
+"""
+def extract_account_ids_from_args(args: str) -> List[int]:
+    account_ids = set()
+    for arg in sys.argv[1:]:
+        try:
+            _id = int(arg)
+        except: 
+            continue
+
+        if _id > 0:
+            account_ids.add(_id)
+
+    return list(account_ids)
 
 
-asyncio.run(main())
+"""
+Archives the account with its own instance
+"""
+async def archive(account_id: int, ask_for_confirmation: bool) -> None:
+    downloader = await ImageDownloader.create(account_id)
+    await downloader.archive(ask_for_confirmation)
+
+
+"""
+CLI implementation
+"""
+def cli():
+    account_ids = extract_account_ids_from_args(sys.argv[1:])
+    if not account_ids:
+        print("Usage: python image_downloader.py *account_ids")
+        return
+    
+    print("Rec Room Image Archiver")
+    print("This tool downloads all photos and tags.")
+
+    if len(account_ids) == 1:
+        cli_singular(account_ids[0])
+    else:
+        cli_bulk(account_ids)
+
+
+"""
+Ran when only one account id was given in CLI mode
+"""
+def cli_singular(account_id: int) -> None:
+    asyncio.run(archive(account_id, ask_for_confirmation=True))
+
+
+"""
+Ran when more than one account id was given in CLI mode
+"""
+def cli_bulk(account_ids: List[int]) -> None:
+    print("Given account IDs:", account_ids)
+
+    answer = ""
+    while answer != "y":
+        answer = input("\nWant to archive all these accounts? (y/n) > ").lower()
+        if answer == "n": 
+            print("Cancelled.")
+            return
+
+    for account_id in account_ids:
+        print(f"\nArchiving account: {account_id}...")
+        asyncio.run(archive(account_id, ask_for_confirmation=False))
+
+    print("\nFinished!")
+
+
+# CLI entry point
+if __name__ == "__main__":
+    cli()
