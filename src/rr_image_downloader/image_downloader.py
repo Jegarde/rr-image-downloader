@@ -5,10 +5,13 @@ import aiofiles
 import json
 import shutil
 import sys
+import typer
 from requests_html import AsyncHTMLSession
-from typing import List, Optional
+from typing import List
 from tqdm.asyncio import tqdm_asyncio
 from collections import namedtuple
+from typing_extensions import Annotated
+
 
 # uvloop makes asyncio 2-4x faster. 
 # linux/macos only: doesn't support windows :(
@@ -71,7 +74,6 @@ class ImageDownloader:
         self = ImageDownloader(account_id)
 
         self._create_directories()
-        self._copy_shared_files()
         self.session = aiohttp.ClientSession()
         self.semaphore = asyncio.Semaphore(self.CONCURRENCY)
         self.html_session = AsyncHTMLSession()
@@ -158,19 +160,6 @@ class ImageDownloader:
         for name in directories:
             dir = os.path.join(root_path, name)
             os.makedirs(dir, exist_ok=True)
-
-
-    """
-    Copies shared files into the archive
-    """
-    def _copy_shared_files(self) -> None:
-        root_path = str(self.account_id)
-        shared_files_path = "shared_files"
-
-        assert os.path.exists(root_path), "Directories missing!"
-        if not os.path.exists(shared_files_path): return
-
-        shutil.copytree(shared_files_path, root_path, dirs_exist_ok=True)
 
 
     """
@@ -388,7 +377,9 @@ async def archive(account_id: int, ask_for_confirmation: bool) -> None:
 """
 CLI implementation
 """
-def cli():
+def rr_image_downloader(
+    account_ids: Annotated[List[int], typer.Argument(help="Ids of accounts whose images you want to archive.")] = []
+):
     account_ids = extract_account_ids_from_args(sys.argv[1:])
     if not account_ids:
         print("Usage: python image_downloader.py *account_ids")
@@ -428,8 +419,3 @@ def cli_bulk(account_ids: List[int]) -> None:
         asyncio.run(archive(account_id, ask_for_confirmation=False))
 
     print("\nFinished!")
-
-
-# CLI entry point
-if __name__ == "__main__":
-    cli()

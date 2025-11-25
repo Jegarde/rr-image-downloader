@@ -1,0 +1,28 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rr_image_downloader"
+description = "Archive an account's Rec Room photos and tags."
+version = "2025.11.25"
+dependencies = [
+  "aiohttp[speedups]==3.12.2",
+  "aiofiles==25.1.0",
+  "uvloop==0.22.1",
+  "requests_html==0.10.0",
+  "typer==0.20.0",
+  "lxml_html_clean==0.4.3"
+
+]
+authors = [
+  {name = "Jesse Nieminen"},
+]
+readme = "README.md"
+license-files = ["UNLICENCE"]
+
+[project.scripts]
+rr_image_downloader = "rr_image_downloader.cli:app"
+
+
+
