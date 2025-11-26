@@ -3,9 +3,14 @@ import os
 import asyncio
 import aiofiles
 import json
-import shutil
 import sys
 import typer
+
+# Allows Windows to install Chromium for pyppeteer
+# https://stackoverflow.com/questions/78023508/python-request-html-is-not-downloading-chromium
+PYPPETEER_CHROMIUM_REVISION = '1263111'
+os.environ['PYPPETEER_CHROMIUM_REVISION'] = PYPPETEER_CHROMIUM_REVISION
+
 from requests_html import AsyncHTMLSession
 from typing import List
 from tqdm.asyncio import tqdm_asyncio
@@ -263,7 +268,7 @@ class ImageDownloader:
         room_id = image_data["RoomId"]
         image_name = image_data['ImageName']
 
-        filename = f"{creation_date} [{image_id}] [player: {player_id}] [room: {room_id}] {image_name}"
+        filename = f"{creation_date} [{image_id}] [player {player_id}] [room {room_id}] {image_name}"
         filename = self._add_png_extension_if_missing(filename)
 
         return filename
