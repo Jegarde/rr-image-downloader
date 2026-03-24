@@ -3,6 +3,9 @@ Archive your photos and tags before it's too late!
 
 [Buy me a coffee](https://ko-fi.com/jegarde) if you found this useful and you're feeling generous. :)
 
+## Warning!
+This script downloads images at lightning speeds, which could trigger an IP ban from Rec Room. Use at your own risk, and I am not liable if something goes wrong. You've been warned.
+
 ## Archive
 - All public photos and tags separated in their respective directories
 - File names contain
